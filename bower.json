@@ -1,0 +1,17 @@
+{
+  "name": "jslbx",
+  "description": "A lbx file parser",
+  "main": "dist/jslbx.js",
+  "authors": [
+    "Hannes Widmoser <widmoser@gmail.com>"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/widmoser/jslbx",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}

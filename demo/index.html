@@ -1,0 +1,76 @@
+<html>
+    <head>
+    </head>
+    <body>
+        <div>
+            <input id="paletteFile" type="file">
+            <button onclick="loadPalette()">Load Palette</button>
+            <input id="fileItem" type="file">
+            <button onclick="load()">Load</button>
+        </div>
+        <div>
+            <button onclick="prev()">Previous</button>
+            <button onclick="next()">Next</button>
+            <span id="currentImage">0</span>
+        </div>
+        <canvas id="img" width="640" height="480"></canvas>
+
+        <script type="application/javascript" src="https://rawgit.com/jDataView/jDataView/master/dist/browser/jdataview.js"></script>
+        <script type="application/javascript" src="https://rawgit.com/jDataView/jBinary/master/dist/browser/jbinary.js"></script>
+        <script type="application/javascript" src="../dist/jslbx.js"></script>
+        <script type="application/javascript">
+            var p;
+            var a;
+            var currentImage = 0;
+
+            var canvas = document.getElementById('img');
+            var context = canvas.getContext('2d');
+            var currentImageText = document.getElementById('currentImage');
+
+            function showImage() {
+                currentImageText.textContent = currentImage;
+                var imageData = a.images[currentImage].getImageData(context);
+                context.putImageData(imageData, 0, 0);
+            }
+
+            function loadPalette() {
+                var file = document.getElementById('paletteFile').files[0];
+                console.log(file, palette);
+                jBinary.load(file, palette).then(function(binary) {
+                    p = binary.readAll();
+                    console.log('Palette loaded');
+                });
+            }
+            function load() {
+                var file = document.getElementById('fileItem').files[0];
+                var typeset = archive(p);
+                console.log(file, typeset);
+                var result = jBinary.load(file, typeset);
+                result.then(function(binary) {
+                    a = binary.readAll();
+                    currentImage = 0;
+                    console.log('Archive loaded');
+                    showImage();
+                });
+            }
+
+            function next() {
+                currentImage++;
+                if (currentImage >= a.images.length) {
+                    currentImage = a.images.length - 1;
+                }
+                showImage();
+            }
+
+            function prev() {
+                currentImage--;
+                if (currentImage < 0) {
+                    currentImage = 0;
+                }
+                showImage();
+            }
+
+
+        </script>
+    </body>
+</html>

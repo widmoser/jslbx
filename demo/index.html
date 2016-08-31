@@ -9,6 +9,11 @@
             <button onclick="load()">Load</button>
         </div>
         <div>
+            <button onclick="prevPalette()">Previous Palette</button>
+            <button onclick="nextPalette()">Next Palette</button>
+            <span id="currentPalette">0</span>
+        </div>
+        <div>
             <button onclick="prev()">Previous</button>
             <button onclick="next()">Next</button>
             <span id="currentImage">0</span>
@@ -19,33 +24,53 @@
         <script type="application/javascript" src="https://rawgit.com/jDataView/jBinary/master/dist/browser/jbinary.js"></script>
         <script type="application/javascript" src="../dist/jslbx.js"></script>
         <script type="application/javascript">
-            var p;
+            var currentPalette = 0;
             var a;
             var currentImage = 0;
 
             var canvas = document.getElementById('img');
             var context = canvas.getContext('2d');
             var currentImageText = document.getElementById('currentImage');
+            var currentPaletteText = document.getElementById('currentPalette');
+
+            function renderFrame(img, frameIndex) {
+                console.log(palettes, currentPalette);
+                var imageData = img.getImageData(context, palettes[currentPalette], frameIndex);
+                context.clearRect(0, 0, 640, 480);
+                context.putImageData(imageData, 0, 0);
+            }
 
             function showImage() {
+                currentPaletteText.textContent = currentPalette;
                 currentImageText.textContent = currentImage;
-                var imageData = a.images[currentImage].getImageData(context);
-                context.putImageData(imageData, 0, 0);
+                var img = a.resources[currentImage];
+                if (img.header.frameCount === 1) {
+                    renderFrame(img, 0);
+                } else {
+                    var currentFrameIndex = 0;
+                    function renderFrameAnimation() {
+                        renderFrame(img, currentFrameIndex);
+                        if (currentFrameIndex < img.header.frameCount - 1) {
+                            currentFrameIndex++;
+                            requestAnimationFrame(renderFrameAnimation);
+                        }
+                    }
+
+                    // animation
+                    requestAnimationFrame(renderFrameAnimation);
+                }
             }
 
             function loadPalette() {
                 var file = document.getElementById('paletteFile').files[0];
-                console.log(file, palette);
-                jBinary.load(file, palette).then(function(binary) {
-                    p = binary.readAll();
-                    console.log('Palette loaded');
+                jBinary.load(file, archive('palette')).then(function(binary) {
+                    palettes = binary.readAll().resources;
+                    console.log('Palettes loaded');
                 });
             }
             function load() {
                 var file = document.getElementById('fileItem').files[0];
-                var typeset = archive(p);
-                console.log(file, typeset);
-                var result = jBinary.load(file, typeset);
+                var result = jBinary.load(file, archive('image'));
                 result.then(function(binary) {
                     a = binary.readAll();
                     currentImage = 0;
@@ -56,8 +81,8 @@
 
             function next() {
                 currentImage++;
-                if (currentImage >= a.images.length) {
-                    currentImage = a.images.length - 1;
+                if (currentImage >= a.resources.length) {
+                    currentImage = a.resources.length - 1;
                 }
                 showImage();
             }
@@ -66,6 +91,22 @@
                 currentImage--;
                 if (currentImage < 0) {
                     currentImage = 0;
+                }
+                showImage();
+            }
+
+            function nextPalette() {
+                currentPalette++;
+                if (currentPalette >= palettes.length) {
+                    currentPalette = palettes.length - 1;
+                }
+                showImage();
+            }
+
+            function prevPalette() {
+                currentPalette--;
+                if (currentPalette < 0) {
+                    currentPalette = 0;
                 }
                 showImage();
             }

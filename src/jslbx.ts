@@ -23,7 +23,7 @@ class ImageHeader {
 
 class Sequence {
 
-    public pixels: Color[];
+    public pixels: number[];
     public offset: { x: number, y: number };
 
     constructor(public length: number) {
@@ -49,12 +49,13 @@ class LBXImage {
     ) {
     }
 
-    public getImageData(context, frameIndex: number = 0) {
+    public getImageData(context, palette, frameIndex: number = 0) {
         const imageData = context.createImageData(this.header.width, this.header.height);
         const frame = this.frames[frameIndex];
         let offset = 0;
         frame.sequences.forEach(seq => {
-            const rawPixels = seq.pixels.reduce((res, color) => {
+            const rawPixels = seq.pixels.reduce((res, colorIndex) => {
+                const color = palette[colorIndex];
                 return res.concat([color.red, color.green, color.blue, color.alpha]);
             }, []);
             const offset = seq.offset.y*this.header.width*4 + seq.offset.x*4;
@@ -88,152 +89,135 @@ const color = jBinary.Type({
     }
 });
 
-const palette = {
-    'jBinary.all': 'colors',
+const archive = (fileType) => ({ 
+    'jBinary.all': ['archive', fileType],
     'jBinary.littleEndian': true,
     color: color,
-    colors: ['array', 'color', 256]
-}
-
-const archive = function(palette) { 
-    return {
-        'jBinary.all': ['archive', palette],
-        'jBinary.littleEndian': true,
-        color: color,
-        archiveHeader: {
-            fileCount: 'uint16',
-            verificationCode: ['const', 'uint32', 65197],
-            flags: 'uint16',
-            offsets: ['array', 'uint32', 'fileCount'],
-            fileSize: 'uint32'
-        },
-        imageHeader: {
-            width: 'uint16',
-            height: 'uint16',
-            notUsed: 'uint16',
-            frameCount: 'uint16',
-            frameDelay: 'uint16',
-            flags: 'uint16',
-            frameOffsets: ['array', 'uint32', 'frameCount'],
-            eofFrameOffset: 'uint32'
-        },
-        internalPalette: jBinary.Template({
-            baseType: {
-                offset: 'uint16',
-                length: 'uint16',
-                values: ['array', 'color', 'length']
-            },
-            read: function() {
-                const base = this.baseRead();
-                const palette = new Array(256);
-                base.values.forEach((v, i) => {
-                    palette[i + base.offset] = v;
-                });
-                return palette;
-            },
-            write: function(palette) {
-                const isColor = v => typeof(v) === 'object'; // TODO: use Color?
-                const offset = palette.findIndex(isColor)
-                const filtered = palette.filter(isColor);
-                this.base.write({
-                    offset: offset,
-                    length: filtered.length,
-                    values: filtered
-                });
-            }
-        }),
-        sequenceHeader: {
+    archiveHeader: {
+        fileCount: 'uint16',
+        verificationCode: ['const', 'uint32', 65197],
+        flags: 'uint16',
+        offsets: ['array', 'uint32', 'fileCount'],
+        fileSize: 'uint32'
+    },
+    imageHeader: {
+        width: 'uint16',
+        height: 'uint16',
+        notUsed: 'uint16',
+        frameCount: 'uint16',
+        frameDelay: 'uint16',
+        flags: 'uint16',
+        frameOffsets: ['array', 'uint32', 'frameCount'],
+        eofFrameOffset: 'uint32'
+    },
+    internalPalette: jBinary.Template({
+        baseType: {
+            offset: 'uint16',
             length: 'uint16',
-            relXOffset: 'uint16'
+            values: ['array', 'color', 'length']
         },
-        frame: jBinary.Type({
-            setParams: function(palette) {
-                this.palette = palette;
-            },
-            read: function() {
-                let frameIndicator = this.binary.read('uint16');
-                if (frameIndicator !== 1) {
-                    // skip:
-                    return;
-                }
-                let yOffset = this.binary.read('uint16');
-                let xOffset = 0;
-                const frame = new Frame();
-                while (true) {
+        read: function() {
+            const base = this.baseRead();
+            const palette = new Array(256);
+            base.values.forEach((v, i) => {
+                palette[i + base.offset] = v;
+            });
+            return palette;
+        },
+        write: function(palette) {
+            const isColor = v => typeof(v) === 'object'; // TODO: use Color?
+            const offset = palette.findIndex(isColor)
+            const filtered = palette.filter(isColor);
+            this.base.write({
+                offset: offset,
+                length: filtered.length,
+                values: filtered
+            });
+        }
+    }),
+    sequenceHeader: {
+        length: 'uint16',
+        relXOffset: 'uint16'
+    },
+    frame: jBinary.Type({
+        read: function() {
+            let frameIndicator = this.binary.read('uint16');
+            if (frameIndicator !== 1) {
+                // skip:
+                return;
+            }
+            let yOffset = this.binary.read('uint16');
+            let xOffset = 0;
+            const frame = new Frame();
+            while (true) {
 
-                    const sequenceHeader = this.binary.read('sequenceHeader');
-                    const sequence = new Sequence(sequenceHeader.length);
-                    if (sequence.length === 0) {
-                        // y offset:
-                        const yIncr = sequenceHeader.relXOffset;
-                        if (yIncr === 1000) {
-                            // end of frame:
-                            return frame;
-                        } else {
-                            yOffset += yIncr;
-                            xOffset = 0;
-                        }
+                const sequenceHeader = this.binary.read('sequenceHeader');
+                const sequence = new Sequence(sequenceHeader.length);
+                if (sequence.length === 0) {
+                    // y offset:
+                    const yIncr = sequenceHeader.relXOffset;
+                    if (yIncr === 1000) {
+                        // end of frame:
+                        return frame;
                     } else {
-                        xOffset += sequenceHeader.relXOffset;
-                        for (let i = 0; i < sequence.length; ++i) {
-                            const colorIndex = this.binary.read('uint8');
-                            sequence.offset = {
-                                x: xOffset,
-                                y: yOffset
-                            };
-                            sequence.pixels.push(this.palette[colorIndex]);
-                        }
-
-                        if (sequence.length % 2 !== 0) {
-                            // odd length
-                            this.binary.skip(1);
-                        }
-
-                        frame.sequences.push(sequence);
-                        xOffset += sequence.length;
+                        yOffset += yIncr;
+                        xOffset = 0;
                     }
-                }
-            },
-            write: function(frame) {
-                // todo:
-            }
-        }),
-        image: jBinary.Type({
-            setParams: function(palette) {
-                this.palette = palette;
-            },
-            read: function() {
-                const pos = this.binary.tell();
-                const header = this.binary.read('imageHeader');
-                const palette = (header.flags & MASK_INTERNAL_PALETTE) ? this.binary.read('internalPalette') : this.palette;
-                return new LBXImage(
-                    header,
-                    palette,
-                    header.frameOffsets.map((offset, i) => {
-                        this.binary.seek(pos + offset);
-                        return this.binary.read(['frame', this.palette]);
-                    }));
-            }
-        }),
-        archive: jBinary.Type({
-            params: ['palette'],
-            read: function() {
-                const header = this.binary.read('archiveHeader');
-                this.binary.seek(header.offsets[0]);
-                return {
-                    header: header,
-                    images: header.offsets.map(offset => {
-                        this.binary.seek(offset);
-                        return this.binary.read(['image', this.palette]);
-                    })
+                } else {
+                    xOffset += sequenceHeader.relXOffset;
+                    for (let i = 0; i < sequence.length; ++i) {
+                        const colorIndex = this.binary.read('uint8');
+                        sequence.offset = {
+                            x: xOffset,
+                            y: yOffset
+                        };
+                        sequence.pixels.push(colorIndex);
+                    }
+
+                    if (sequence.length % 2 !== 0) {
+                        // odd length
+                        this.binary.skip(1);
+                    }
+
+                    frame.sequences.push(sequence);
+                    xOffset += sequence.length;
                 }
             }
-        })
-    }
-};
-
-class JsLBX {
-    static getImageData(context, frame) {
-
-    }
-}
+        },
+        write: function(frame) {
+            // todo:
+        }
+    }),
+    image: jBinary.Type({
+        read: function() {
+            const pos = this.binary.tell();
+            const header = this.binary.read('imageHeader');
+            const palette = (header.flags & MASK_INTERNAL_PALETTE) ? this.binary.read('internalPalette') : undefined;
+            return new LBXImage(
+                header,
+                palette,
+                header.frameOffsets.map((offset, i) => {
+                    this.binary.seek(pos + offset);
+                    return this.binary.read('frame');
+                }));
+        }
+    }),
+    palette: ['array', 'color', 256],
+    archive: jBinary.Type({
+        setParams: function(fileType) {
+            this.fileType = fileType;
+        },
+        read: function() {
+            const header = this.binary.read('archiveHeader');
+            this.binary.seek(header.offsets[0]);
+            return {
+                header: header,
+                resources: header.offsets.map((offset, i) => {
+                    console.log('Reading ', this.fileType, i);
+                    this.binary.seek(offset);
+                    return this.binary.read(this.fileType);
+                })
+            }
+        }
+    })
+})

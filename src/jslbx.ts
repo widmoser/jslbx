@@ -151,11 +151,14 @@ const archive = (fileType) => ({
             const frame = new Frame();
             while (true) {
 
-                const sequenceHeader = this.binary.read('sequenceHeader');
-                const sequence = new Sequence(sequenceHeader.length);
+                const readSequenceHeader = () => this.binary.read('sequenceHeader');
+
+                const length = this.view.getUint16(undefined, true);
+                const relXOffset = this.view.getUint16(undefined, true);
+                const sequence = new Sequence(length);
                 if (sequence.length === 0) {
                     // y offset:
-                    const yIncr = sequenceHeader.relXOffset;
+                    const yIncr = relXOffset;
                     if (yIncr === 1000) {
                         // end of frame:
                         return frame;
@@ -164,15 +167,12 @@ const archive = (fileType) => ({
                         xOffset = 0;
                     }
                 } else {
-                    xOffset += sequenceHeader.relXOffset;
-                    for (let i = 0; i < sequence.length; ++i) {
-                        const colorIndex = this.binary.read('uint8');
-                        sequence.offset = {
-                            x: xOffset,
-                            y: yOffset
-                        };
-                        sequence.pixels.push(colorIndex);
-                    }
+                    xOffset += relXOffset;
+                    sequence.offset = {
+                        x: xOffset,
+                        y: yOffset
+                    };
+                    sequence.pixels = this.view.getBytes(sequence.length, undefined, true, true);
 
                     if (sequence.length % 2 !== 0) {
                         // odd length
@@ -213,7 +213,6 @@ const archive = (fileType) => ({
             return {
                 header: header,
                 resources: header.offsets.map((offset, i) => {
-                    console.log('Reading ', this.fileType, i);
                     this.binary.seek(offset);
                     return this.binary.read(this.fileType);
                 })

@@ -129,6 +129,7 @@ var archive = function (fileType) { return ({
     },
     frame: jBinary.Type({
         read: function () {
+            var _this = this;
             var frameIndicator = this.binary.read('uint16');
             if (frameIndicator !== 1) {
                 // skip:
@@ -138,11 +139,13 @@ var archive = function (fileType) { return ({
             var xOffset = 0;
             var frame = new Frame();
             while (true) {
-                var sequenceHeader = this.binary.read('sequenceHeader');
-                var sequence = new Sequence(sequenceHeader.length);
+                var readSequenceHeader = function () { return _this.binary.read('sequenceHeader'); };
+                var length_1 = this.view.getUint16(undefined, true);
+                var relXOffset = this.view.getUint16(undefined, true);
+                var sequence = new Sequence(length_1);
                 if (sequence.length === 0) {
                     // y offset:
-                    var yIncr = sequenceHeader.relXOffset;
+                    var yIncr = relXOffset;
                     if (yIncr === 1000) {
                         // end of frame:
                         return frame;
@@ -153,15 +156,12 @@ var archive = function (fileType) { return ({
                     }
                 }
                 else {
-                    xOffset += sequenceHeader.relXOffset;
-                    for (var i = 0; i < sequence.length; ++i) {
-                        var colorIndex = this.binary.read('uint8');
-                        sequence.offset = {
-                            x: xOffset,
-                            y: yOffset
-                        };
-                        sequence.pixels.push(colorIndex);
-                    }
+                    xOffset += relXOffset;
+                    sequence.offset = {
+                        x: xOffset,
+                        y: yOffset
+                    };
+                    sequence.pixels = this.view.getBytes(sequence.length, undefined, true, true);
                     if (sequence.length % 2 !== 0) {
                         // odd length
                         this.binary.skip(1);
@@ -199,7 +199,6 @@ var archive = function (fileType) { return ({
             return {
                 header: header,
                 resources: header.offsets.map(function (offset, i) {
-                    console.log('Reading ', _this.fileType, i);
                     _this.binary.seek(offset);
                     return _this.binary.read(_this.fileType);
                 })

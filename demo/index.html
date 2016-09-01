@@ -34,7 +34,8 @@
             var currentPaletteText = document.getElementById('currentPalette');
 
             function renderFrame(img, frameIndex) {
-                var imageData = img.getImageData(context, palettes[currentPalette], frameIndex);
+                var p = (img.palette) ? img.palette : palettes[currentPalette];
+                var imageData = img.getImageData(context, p, frameIndex);
                 context.clearRect(0, 0, 640, 480);
                 context.putImageData(imageData, 0, 0);
             }

@@ -22,7 +22,7 @@ gulp.task('less', function() {
 gulp.task('compile', function () {
   return gulp.src('src/**/*.ts')
     .pipe(ts({
-      noImplicitAny: true
+      //noImplicitAny: true
     }))
     .pipe(concat('jslbx.js'))
     .pipe(gulp.dest('dist'));

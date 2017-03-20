@@ -1,0 +1,30 @@
+<html>
+    <head>
+    </head>
+    <body>
+        <canvas id="img" width="640" height="480"></canvas>
+
+        <script type="application/javascript" src="https://rawgit.com/jDataView/jDataView/master/dist/browser/jdataview.js"></script>
+        <script type="application/javascript" src="https://rawgit.com/jDataView/jBinary/master/dist/browser/jbinary.js"></script>
+        <script type="application/javascript" src="jslbx.js"></script>
+        <script type="application/javascript">
+            var currentPalette = 0;
+            var a;
+            var currentImage = 0;
+
+            var canvas = document.getElementById('img');
+            var context = canvas.getContext('2d');
+
+            Promise.all([
+                JsLBX.loadArchive('/data/FONTS.lbx'),
+                JsLBX.loadArchive('/data/BLDG0.lbx'),
+                JsLBX.loadArchive('/data/PLANETS.lbx')
+            ])
+            .then(function() {
+                JsLBX.draw('/data/PLANETS.lbx#0', context, 0, 0, 0);
+                JsLBX.draw('/data/BLDG0.lbx#0', context, 0, 0, 0);
+            });
+            
+        </script>
+    </body>
+</html>

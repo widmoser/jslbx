@@ -1,4 +1,6 @@
 declare const jBinary: any;
+declare const fetch: any; // TODO
+declare const Promise: any; // TODO
 
 class Color {
     constructor(
@@ -7,6 +9,8 @@ class Color {
         public green: number,
         public blue: number
     ) {}
+
+    static EMPTY = new Color(255, 0, 0, 0); 
 }
 
 class ImageHeader {
@@ -55,7 +59,10 @@ class LBXImage {
         let offset = 0;
         frame.sequences.forEach(seq => {
             const rawPixels = seq.pixels.reduce((res, colorIndex) => {
-                const color = palette[colorIndex];
+                let color = palette[colorIndex];
+                if (color === undefined) {
+                    color = Color.EMPTY;
+                }
                 return res.concat([color.red, color.green, color.blue, color.alpha]);
             }, []);
             const offset = seq.offset.y*this.header.width*4 + seq.offset.x*4;
@@ -63,6 +70,13 @@ class LBXImage {
             //offset += rawPixels.length;
         });
         return imageData;
+    }
+
+    public getImage(context, palette, frameIndex: number = 0) {
+        const imageData = this.getImageData(context, palette, frameIndex);
+        const img = new Image();
+        img.src = imageData;
+        return img;
     }
 
 }
@@ -220,3 +234,57 @@ const archive = (fileType) => ({
         }
     })
 })
+
+class JsLBX {
+
+    private static archiveCache = {};
+    private static imageCache = {};
+    private static palettes = [];
+
+    private static paletteMapping = {
+        '/data/BLDG0.lbx': '/data/FONTS.lbx#2'
+    };
+
+    private static typeMapping = {
+        '/data/FONTS.lbx': 'palette',
+        '/data/BLDG0.lbx': 'image',
+        '/data/PLANETS.lbx': 'image'
+    }
+
+    static loadArchive(path) {
+        const type = JsLBX.typeMapping[path];
+        return fetch(path).then(response => { 
+            return response.blob().then(blob => 
+                jBinary.load(blob, archive(type)).then(binary => {
+                    const a = binary.readAll();
+                    JsLBX.archiveCache[path] = a;
+                    return a;
+                })
+            ) 
+        });
+    }
+
+    static getArchive(path) {
+        return JsLBX.archiveCache[path];
+    }
+
+    static getResource(path) {
+        const [archivePath, index] = path.split('#');
+        return JsLBX.getArchive(archivePath).resources[index];
+    }
+
+    static getPalette(img, path) {
+        if (img.palette !== undefined) {
+            return img.palette;
+        } else {
+            const [archivePath, index] = path.split('#');
+            return JsLBX.getResource(JsLBX.paletteMapping[archivePath]);
+        }
+    }
+
+    static draw(path, context, frameIndex, x, y) {
+        const img = JsLBX.getResource(path);
+        context.drawImage(img.getImage(context, JsLBX.getPalette(img, path), frameIndex), x, y);
+    }
+
+}

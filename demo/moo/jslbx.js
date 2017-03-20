@@ -50,7 +50,6 @@ var LBXImage = (function () {
                 var color = palette[colorIndex];
                 if (color === undefined) {
                     color = Color.EMPTY;
-                    console.warn("Color index " + colorIndex + " out of range. Palette has only " + palette.length + " colors");
                 }
                 return res.concat([color.red, color.green, color.blue, color.alpha]);
             }, []);
@@ -59,6 +58,13 @@ var LBXImage = (function () {
             //offset += rawPixels.length;
         });
         return imageData;
+    };
+    LBXImage.prototype.getImage = function (context, palette, frameIndex) {
+        if (frameIndex === void 0) { frameIndex = 0; }
+        var imageData = this.getImageData(context, palette, frameIndex);
+        var img = new Image();
+        img.src = imageData;
+        return img;
     };
     return LBXImage;
 }());
@@ -214,41 +220,48 @@ var archive = function (fileType) { return ({
 var JsLBX = (function () {
     function JsLBX() {
     }
-    JsLBX.fetchArchive = function (path, type) {
-        var cached = JsLBX.archiveCache[path];
-        if (cached !== undefined) {
-            return Promise.resolve(cached);
-        }
-        else {
-            fetch(path).then(function (response) {
-                return jBinary.load(response.blob(), archive(type)).then(function (binary) {
+    JsLBX.loadArchive = function (path) {
+        var type = JsLBX.typeMapping[path];
+        return fetch(path).then(function (response) {
+            return response.blob().then(function (blob) {
+                return jBinary.load(blob, archive(type)).then(function (binary) {
                     var a = binary.readAll();
                     JsLBX.archiveCache[path] = a;
                     return a;
                 });
             });
-        }
+        });
     };
-    JsLBX.fetchResource = function (path, type) {
+    JsLBX.getArchive = function (path) {
+        return JsLBX.archiveCache[path];
+    };
+    JsLBX.getResource = function (path) {
         var _a = path.split('#'), archivePath = _a[0], index = _a[1];
-        return JsLBX.fetchArchive(archivePath, type).then(function (a) { return a.resources[index]; });
+        return JsLBX.getArchive(archivePath).resources[index];
     };
-    JsLBX.fetchImage = function (path, palettePath, context, frameIndex) {
-        var cached = JsLBX.imageCache[path];
-        if (cached !== undefined) {
-            return Promise.resolve(cached);
+    JsLBX.getPalette = function (img, path) {
+        if (img.palette !== undefined) {
+            return img.palette;
         }
         else {
-            return Promise.all(JsLBX.fetchResource(path, 'image'), JsLBX.fetchResource(palettePath, 'palette'))
-                .then(function (_a) {
-                var image = _a[0], palette = _a[1];
-                var imageData = image.getImageData(context, palette, frameIndex);
-                JsLBX.imageCache[path] = imageData;
-                return imageData;
-            });
+            var _a = path.split('#'), archivePath = _a[0], index = _a[1];
+            return JsLBX.getResource(JsLBX.paletteMapping[archivePath]);
         }
+    };
+    JsLBX.draw = function (path, context, frameIndex, x, y) {
+        var img = JsLBX.getResource(path);
+        context.drawImage(img.getImage(context, JsLBX.getPalette(img, path), frameIndex), x, y);
     };
     JsLBX.archiveCache = {};
     JsLBX.imageCache = {};
+    JsLBX.palettes = [];
+    JsLBX.paletteMapping = {
+        '/data/BLDG0.lbx': '/data/FONTS.lbx#2'
+    };
+    JsLBX.typeMapping = {
+        '/data/FONTS.lbx': 'palette',
+        '/data/BLDG0.lbx': 'image',
+        '/data/PLANETS.lbx': 'image'
+    };
     return JsLBX;
 }());

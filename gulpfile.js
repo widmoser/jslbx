@@ -16,7 +16,7 @@ gulp.task('build', ['compile', 'less']);
 gulp.task('less', function() {
   return gulp.src('src/**/*.less')
     .pipe(less())
-    .pipe(gulp.dest('dist'));
+    .pipe(gulp.dest('demo/moo'));
 });
 
 gulp.task('compile', function () {
@@ -25,5 +25,5 @@ gulp.task('compile', function () {
       //noImplicitAny: true
     }))
     .pipe(concat('jslbx.js'))
-    .pipe(gulp.dest('dist'));
+    .pipe(gulp.dest('demo/moo'));
 });
